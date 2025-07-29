@@ -1,0 +1,12 @@
+{
+  "databaseUrl": "postgres://root@localhost:26257/redis?pool_max_conns=10",
+  "databaseName": "defaultdb",
+  "sqliteDbPath": "./data/redis.db",
+  "maxDatabaseConnection": 10,
+  "kafkaServer": "localhost:9093",
+  "redisServer": "redis://default:WymGCKXPQGLdM87tKdPfbkGxYr0auDUI@redis-10215.c22618.us-central1-1.gcp.cloud.rlrcp.com:10215/0",
+  "natsServer": "nats://127.0.0.1:4222",
+  "bucketName": "redis",
+  "gcpUrl": "https://storage.googleapis.com",
+  "fromEmail": "rb.namangujjar1999@gmail.com"
+}

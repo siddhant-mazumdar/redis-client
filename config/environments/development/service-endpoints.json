@@ -1,0 +1,8 @@
+{
+  "serviceEndpoints": [
+    {
+      "serviceName": "S1",
+      "endpoint": "https://s1.com"
+    }
+  ]
+}
