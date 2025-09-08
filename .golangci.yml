@@ -1,0 +1,23 @@
+run:
+  timeout: 5m
+  tests: true
+  skip-dirs:
+    - data
+    - .history
+linters:
+  enable:
+    - govet
+    - gosimple
+    - staticcheck
+    - ineffassign
+    - typecheck
+    - unused
+    - errcheck
+    - gocritic
+    - revive
+issues:
+  exclude-dirs:
+    - data
+    - .history
+  exclude-use-default: false
+

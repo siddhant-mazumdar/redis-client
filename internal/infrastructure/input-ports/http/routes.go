@@ -12,6 +12,7 @@ func (s *server) initializeRoutes() {
 	SERVICE_ENDPOINT = s.config.GetConfig().ServiceEndpointPrefix
 	addSampleRoutes(s)
 	addRedisRoutes(s)
+	addHashRoutes(s)
 }
 
 func addSampleRoutes(s *server) {
@@ -33,4 +34,11 @@ func addRedisRoutes(s *server) {
 	s.echo.POST(SERVICE_ENDPOINT+"/v1/redis/get-data", s.controllers.RespController.GetStoredData)
 	s.echo.POST(SERVICE_ENDPOINT+"/v1/redis/delete-data", s.controllers.RespController.DeleteStoredData)
 	s.echo.GET(SERVICE_ENDPOINT+"/v1/redis/command-history", s.controllers.RespController.GetCommandHistory)
+}
+
+func addHashRoutes(s *server) {
+	s.echo.POST(SERVICE_ENDPOINT+"/v1/redis/hmset", s.controllers.RespController.HMSetHTTP)
+	s.echo.POST(SERVICE_ENDPOINT+"/v1/redis/hmget", s.controllers.RespController.HMGetHTTP)
+	s.echo.POST(SERVICE_ENDPOINT+"/v1/redis/hmget-multi", s.controllers.RespController.HMGetMultiHTTP)
+
 }

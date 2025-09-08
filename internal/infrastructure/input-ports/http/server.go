@@ -2,15 +2,18 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"go-redis/config"
+	"go-redis/internal/infrastructure/input-ports/tcp"
 	"go-redis/internal/usecases"
 	"log"
 	"os"
 	"os/signal"
 	"strconv"
-	"sync"
 	"syscall"
 	"time"
+
+	stdhttp "net/http"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -22,8 +25,8 @@ type server struct {
 	controllers *Controllers
 	config      config.IConfig
 	messageBus  *MessageBus
-	mu          sync.RWMutex
 	shutdown    chan os.Signal
+	tcpServer   *tcp.Server
 }
 
 func NewServer(useCases usecases.IUseCases, config config.IConfig) *server {
@@ -55,47 +58,20 @@ func NewServer(useCases usecases.IUseCases, config config.IConfig) *server {
 	// Start message bus
 	server.messageBus.Start()
 
-	return server
-}
-
-func (s *server) asyncRequestMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		// Create a unique request ID
-		requestID := c.Response().Header().Get(echo.HeaderXRequestID)
-		if requestID == "" {
-			requestID = strconv.FormatInt(time.Now().UnixNano(), 36)
-		}
-
-		// Create response channel
-		responseChan := make(chan interface{}, 1)
-
-		// Create message for the request
-		msg := Message{
-			ID:        requestID,
-			Type:      RequestMessage,
-			Data:      map[string]interface{}{"context": c, "handler": next},
-			Timestamp: time.Now(),
-			Context:   c.Request().Context(),
-			Response:  responseChan,
-		}
-
-		// Send message to message bus
-		s.messageBus.SendRequest(msg)
-
-		// Wait for response or timeout
-		select {
-		case response := <-responseChan:
-			// Handle the response from message bus
-			if err, ok := response.(error); ok {
-				return err
+	// Start TCP server for direct connections (Redis-compatible subset)
+	// Default port 6379 unless overridden by REDIS_TCP_PORT env var
+	server.tcpServer = tcp.NewServer(useCases)
+	go func() {
+		port := 6379
+		if p := os.Getenv("REDIS_TCP_PORT"); p != "" {
+			if n, err := strconv.Atoi(p); err == nil {
+				port = n
 			}
-			return nil
-		case <-time.After(30 * time.Second):
-			return echo.NewHTTPError(408, "Request timeout")
-		case <-c.Request().Context().Done():
-			return echo.NewHTTPError(499, "Client disconnected")
 		}
-	}
+		server.tcpServer.Start(port)
+	}()
+
+	return server
 }
 
 func (s *server) addHealthCheckRoutes() {
@@ -118,14 +94,29 @@ func (s *server) Start() {
 		}
 	}
 
+	bindAddr := os.Getenv("BIND_ADDR")
+	if bindAddr == "" {
+		bindAddr = "127.0.0.1"
+	}
+	addr := fmt.Sprintf("%s:%d", bindAddr, port)
+
 	// Setup graceful shutdown
 	signal.Notify(s.shutdown, os.Interrupt, syscall.SIGTERM)
 
+	// Configure HTTP server with timeouts
+	s.echo.HideBanner = true
+	s.echo.Server = &stdhttp.Server{
+		Addr:         addr,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
 	// Start server in a goroutine
 	go func() {
-		log.Printf("Server starting on port %d", port)
-		if err := s.echo.Start(":" + strconv.Itoa(port)); err != nil {
-			log.Printf("Server error: %v", err)
+		log.Printf("HTTP server starting on %s", addr)
+		if err := s.echo.StartServer(s.echo.Server); err != nil && err != stdhttp.ErrServerClosed {
+			log.Printf("HTTP server error: %v", err)
 		}
 	}()
 
@@ -136,25 +127,34 @@ func (s *server) Start() {
 func (s *server) runMainLoop() {
 	log.Println("Server running on main thread, waiting for requests...")
 
-	// Main thread loop - handle shutdown and monitoring
+	cleanupTicker := time.NewTicker(30 * time.Minute)
+	healthTicker := time.NewTicker(10 * time.Second)
+	defer cleanupTicker.Stop()
+	defer healthTicker.Stop()
+
 	for {
 		select {
 		case sig := <-s.shutdown:
 			log.Printf("Received signal: %v", sig)
 			s.gracefulShutdown()
 			return
-		case <-time.After(10 * time.Second):
-			// Periodic health check or maintenance tasks
+		case <-healthTicker.C:
 			s.performMaintenanceTasks()
+		case <-cleanupTicker.C:
+			// background TTL cleanup every 30 minutes
+			deleted, err := s.useCases.GetRedisUseCases().GetCommands().CleanupExpired.Handle()
+			if err != nil {
+				log.Printf("TTL cleanup error: %v", err)
+			} else if deleted > 0 {
+				log.Printf("TTL cleanup removed %d expired keys", deleted)
+			}
 		}
 	}
 }
 
 func (s *server) performMaintenanceTasks() {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	// Log active connections, cleanup, etc.
+	// lightweight, do not hold read lock while doing DB work
+	// 30-min TTL cleanup cadence handled via ticker in runMainLoop
 	log.Printf("Server health check - Time: %v", time.Now())
 }
 
@@ -164,6 +164,13 @@ func (s *server) gracefulShutdown() {
 	// Stop message bus
 	s.messageBus.Stop()
 
+	// Close TCP server listener
+	if s.tcpServer != nil {
+		if err := s.tcpServer.Close(); err != nil {
+			log.Printf("TCP server close error: %v", err)
+		}
+	}
+
 	// Create context with timeout for shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -171,6 +178,11 @@ func (s *server) gracefulShutdown() {
 	// Shutdown Echo server
 	if err := s.echo.Shutdown(ctx); err != nil {
 		log.Printf("Error during shutdown: %v", err)
+	}
+
+	// Close use cases (will close repository statements)
+	if err := s.useCases.Close(); err != nil {
+		log.Printf("Error closing use cases: %v", err)
 	}
 
 	log.Println("Server shutdown complete")

@@ -6,6 +6,7 @@ import (
 
 type IInterfaceAdapters interface {
 	GetSQLiteDBInterfaceAdapter() ISqliteDbRepositories
+	Close() error
 }
 
 type interfaceAdapters struct {
@@ -20,4 +21,11 @@ func NewInterfaceAdapters(config config.IConfig) IInterfaceAdapters {
 
 func (i *interfaceAdapters) GetSQLiteDBInterfaceAdapter() ISqliteDbRepositories {
 	return i.SqliteDbRepositories
+}
+
+func (i *interfaceAdapters) Close() error {
+	if i.SqliteDbRepositories != nil {
+		return i.SqliteDbRepositories.Close()
+	}
+	return nil
 }

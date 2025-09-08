@@ -3,7 +3,7 @@ package main
 import (
 	"go-redis/config"
 	"go-redis/internal"
-	"go-redis/internal/infrastructure/input-ports/http"
+	httpserver "go-redis/internal/infrastructure/input-ports/http"
 	"os"
 )
 
@@ -15,6 +15,6 @@ func main() {
 
 	serviceConfig := config.NewConfig().GetConfig()
 	useCases := internal.NewAdapterUseCaseBridge(serviceConfig)
-	server := http.NewServer(useCases, serviceConfig)
+	server := httpserver.NewServer(useCases, serviceConfig)
 	server.Start()
 }

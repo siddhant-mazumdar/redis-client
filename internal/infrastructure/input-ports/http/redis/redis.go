@@ -18,6 +18,9 @@ type IRespController interface {
 	GetStoredData(c echo.Context) error
 	DeleteStoredData(c echo.Context) error
 	GetCommandHistory(c echo.Context) error
+	HMSetHTTP(c echo.Context) error
+	HMGetHTTP(c echo.Context) error
+	HMGetMultiHTTP(c echo.Context) error
 }
 
 type RespController struct {

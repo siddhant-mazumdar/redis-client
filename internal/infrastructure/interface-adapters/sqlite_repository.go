@@ -8,6 +8,7 @@ import (
 
 type ISqliteDbRepositories interface {
 	GetRedisRepository() sqlite.IRedisRepository
+	Close() error
 }
 
 type sqliteDbRepositories struct {
@@ -28,4 +29,11 @@ func NewSqliteDbRepositories(config config.IConfig) *sqliteDbRepositories {
 
 func (s *sqliteDbRepositories) GetRedisRepository() sqlite.IRedisRepository {
 	return s.redisRepository
+}
+
+func (s *sqliteDbRepositories) Close() error {
+	if c, ok := s.redisRepository.(interface{ Close() error }); ok {
+		return c.Close()
+	}
+	return nil
 }

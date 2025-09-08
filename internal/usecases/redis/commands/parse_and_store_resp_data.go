@@ -98,10 +98,8 @@ func (p *parseAndStoreRespDataUseCase) storeKeyValue(key string, value interface
 			return err
 		}
 
-		for field, value := range hashData {
-			if err := p.redisRepository.StoreHash(keyID, field, value); err != nil {
-				return fmt.Errorf("failed to store hash field %s: %w", field, err)
-			}
+		if err := p.redisRepository.StoreHashMap(keyID, hashData); err != nil {
+			return fmt.Errorf("failed to store hash map: %w", err)
 		}
 		return nil
 
