@@ -1,0 +1,62 @@
+# golangci-lint configuration file v2
+# See: https://golangci-lint.run/usage/configuration/
+
+version: "2"
+
+run:
+  # Timeout for analysis (disabled by default in v2)
+  timeout: 5m
+
+  # Include test files in analysis
+  tests: true
+
+  # Go version to target
+  go: "1.23"
+
+# Linters configuration
+linters:
+  # Enable specific linters
+  enable:
+    - govet          # Official Go tool for static analysis
+    - staticcheck    # Advanced static analysis (includes gosimple, stylecheck)
+    - ineffassign    # Detect ineffectual assignments
+    - unused         # Find unused code
+    - errcheck       # Check for unchecked errors
+    - gocritic       # Comprehensive Go source code linter
+    - revive         # Fast, configurable, extensible, flexible linter
+    - misspell       # Find commonly misspelled English words
+    - unconvert      # Remove unnecessary type conversions
+    - unparam        # Find unused function parameters
+
+  # Exclusions for linters
+  exclusions:
+    # Directories to exclude from analysis
+    paths:
+      - data
+      - .history
+      - vendor
+      - node_modules
+
+# Formatters configuration
+formatters:
+  enable:
+    - gofmt          # Check if code is formatted with gofmt
+    - goimports      # Check if imports are sorted and grouped
+
+  # Exclusions for formatters
+  exclusions:
+    # Directories to exclude from formatting analysis
+    paths:
+      - data
+      - .history
+      - vendor
+      - node_modules
+
+# Issues configuration
+issues:
+  # Maximum issues count per one linter
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text
+  max-same-issues: 0
+
